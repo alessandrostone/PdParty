@@ -38,6 +38,7 @@
 - (id)init {
 	self = [super init];
 	if(self) {
+		_autoLatency = [[NSUserDefaults standardUserDefaults] floatForKey:@"autoLatency"];
 		self.micVolume = [[NSUserDefaults standardUserDefaults] floatForKey:@"micVolume"];
 		_volume = 1.0;
 		_playing = YES;
@@ -83,6 +84,14 @@
 
 - (float)calculateLatency {
 	return ((float)[self calculateBufferSize] / (float)audioController.sampleRate) * 2.0 * 1000;
+}
+
+- (void)setAutoLatency:(BOOL)autoLatency {
+	if(_autoLatency == autoLatency) {
+		return;
+	}
+	_autoLatency = autoLatency;
+	[[NSUserDefaults standardUserDefaults] setBool:autoLatency forKey:@"autoLatency"];
 }
 
 #pragma mark Current Play Values
@@ -517,10 +526,11 @@
 	}
 
 	audioController.active = NO;
+	int tpb = audioController.ticksPerBuffer;
 	PdAudioStatus status = [audioController configurePlaybackWithSampleRate:sampleRate
-															 numberChannels:2
-															   inputEnabled:YES
-															  mixingEnabled:YES];
+	                                                         numberChannels:2
+	                                                           inputEnabled:YES
+	                                                          mixingEnabled:YES];
 	if(status == PdAudioError) {
 		DDLogError(@"PureData: could not configure PdAudioController");
 	}
@@ -530,6 +540,20 @@
 	else {
 		DDLogVerbose(@"PureData: sampleRate now %d", audioController.sampleRate);
 	}
+	
+	// (re)set tpb if we're not letting the latency be chosen automatically
+	// by the audioController
+	if(!self.autoLatency && audioController.ticksPerBuffer != tpb) {
+		[self setTicksPerBuffer:tpb];
+		DDLogVerbose(@"PureData: resetting ticksPerBuffer after sampleRate change");
+	}
+	
+	// catch zero ticks per buffer
+	if(audioController.ticksPerBuffer <= 0) {
+		[self setTicksPerBuffer:1];
+		DDLogVerbose(@"PureData: caught 0 ticksPerBuffer after sampleRate change, setting to 1");
+	}
+	
 	audioController.active = YES;
 }
 
@@ -564,7 +588,7 @@
 }
 
 - (void)setAudioEnabled:(BOOL)enabled {
-    if(audioController.active == enabled) return;
+	if(audioController.active == enabled) return;
 	audioController.active = enabled;
 }
 
@@ -613,74 +637,74 @@ t_object *pd_checkobject(t_pd *x);
 
 // function to support searching
 static int atoms_match(int inargc, t_atom *inargv, int searchargc,
-    t_atom *searchargv, int wholeword) {
-    int indexin, nmatched;
-    for(indexin = 0; indexin <= inargc - searchargc; indexin++) {
-        for(nmatched = 0; nmatched < searchargc; nmatched++) {
-            t_atom *a1 = &inargv[indexin + nmatched], 
-                *a2 = &searchargv[nmatched];
-            if(a1->a_type == A_SEMI || a1->a_type == A_COMMA) {
+	t_atom *searchargv, int wholeword) {
+	int indexin, nmatched;
+	for(indexin = 0; indexin <= inargc - searchargc; indexin++) {
+		for(nmatched = 0; nmatched < searchargc; nmatched++) {
+			t_atom *a1 = &inargv[indexin + nmatched], 
+				*a2 = &searchargv[nmatched];
+			if(a1->a_type == A_SEMI || a1->a_type == A_COMMA) {
 				if(a2->a_type != a1->a_type) {
-                    goto nomatch;
+					goto nomatch;
 				}
-            }
-            else if(a1->a_type == A_FLOAT || a1->a_type == A_DOLLAR) {
-                if(a2->a_type != a1->a_type ||
+			}
+			else if(a1->a_type == A_FLOAT || a1->a_type == A_DOLLAR) {
+				if(a2->a_type != a1->a_type ||
 				   a1->a_w.w_float != a2->a_w.w_float) {
-                        goto nomatch;
+						goto nomatch;
 				}
-            }
-            else if(a1->a_type == A_SYMBOL || a1->a_type == A_DOLLSYM) {
-                if((a2->a_type != A_SYMBOL && a2->a_type != A_DOLLSYM)
-                    || (wholeword && a1->a_w.w_symbol != a2->a_w.w_symbol)
-                    || (!wholeword &&  !strstr(a1->a_w.w_symbol->s_name,
-                                        a2->a_w.w_symbol->s_name))) {
-                        goto nomatch;
+			}
+			else if(a1->a_type == A_SYMBOL || a1->a_type == A_DOLLSYM) {
+				if((a2->a_type != A_SYMBOL && a2->a_type != A_DOLLSYM)
+					|| (wholeword && a1->a_w.w_symbol != a2->a_w.w_symbol)
+					|| (!wholeword &&  !strstr(a1->a_w.w_symbol->s_name,
+										a2->a_w.w_symbol->s_name))) {
+						goto nomatch;
 				}
-            }           
-        }
-        return 1;
-    nomatch: ;
-    }
-    return 0;
+			}
+		}
+		return 1;
+	nomatch: ;
+	}
+	return 0;
 }
 
 // find an atom or string of atoms
 static int canvas_dofind(t_canvas *x, int *myindexp) {
-    t_gobj *y;
-    int findargc = binbuf_getnatom(canvas_findbuf), didit = 0;
-    t_atom *findargv = binbuf_getvec(canvas_findbuf);
-    for (y = x->gl_list; y; y = y->g_next) {
-        t_object *ob = 0;
-        if ((ob = pd_checkobject(&y->g_pd))) {
-            if(atoms_match(binbuf_getnatom(ob->ob_binbuf),
-                binbuf_getvec(ob->ob_binbuf), findargc, findargv,
-                    canvas_find_wholeword)) {
-                if(*myindexp == canvas_find_index) {
-                    didit = 1;
-                }
-                (*myindexp)++;
-            }
-        }
-    }
-    for(y = x->gl_list; y; y = y->g_next) {
-        if(pd_class(&y->g_pd) == canvas_class) {
-            didit |= canvas_dofind((t_canvas *)y, myindexp);
+	t_gobj *y;
+	int findargc = binbuf_getnatom(canvas_findbuf), didit = 0;
+	t_atom *findargv = binbuf_getvec(canvas_findbuf);
+	for (y = x->gl_list; y; y = y->g_next) {
+		t_object *ob = 0;
+		if ((ob = pd_checkobject(&y->g_pd))) {
+			if(atoms_match(binbuf_getnatom(ob->ob_binbuf),
+				binbuf_getvec(ob->ob_binbuf), findargc, findargv,
+					canvas_find_wholeword)) {
+				if(*myindexp == canvas_find_index) {
+					didit = 1;
+				}
+				(*myindexp)++;
+			}
 		}
 	}
-    return didit;
+	for(y = x->gl_list; y; y = y->g_next) {
+		if(pd_class(&y->g_pd) == canvas_class) {
+			didit |= canvas_dofind((t_canvas *)y, myindexp);
+		}
+	}
+	return didit;
 }
 
 + (BOOL)objectExists:(NSString *)name inPatch:(PdFile *)patch {
 	t_canvas *canvas = (t_canvas *)[patch.fileReference pointerValue];
 	t_symbol *n = gensym([name cStringUsingEncoding:NSASCIIStringEncoding]);
-    int myindex = 0;
-    if(!canvas_findbuf) {
-        canvas_findbuf = binbuf_new();
+	int myindex = 0;
+	if(!canvas_findbuf) {
+		canvas_findbuf = binbuf_new();
 	}
-    binbuf_text(canvas_findbuf, n->s_name, strlen(n->s_name));
-    canvas_find_index = 0;
-    canvas_find_wholeword = 1;
+	binbuf_text(canvas_findbuf, n->s_name, strlen(n->s_name));
+	canvas_find_index = 0;
+	canvas_find_wholeword = 1;
 	BOOL found = canvas_dofind(canvas, &myindex);
 	binbuf_clear(canvas_findbuf);
 	return found;

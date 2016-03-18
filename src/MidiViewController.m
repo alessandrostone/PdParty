@@ -20,7 +20,7 @@
 @implementation MidiViewController
 
 - (void)viewDidLoad {
-    [super viewDidLoad];
+	[super viewDidLoad];
 	
 	// set midi pointer
 	AppDelegate *app = (AppDelegate *)[[UIApplication sharedApplication] delegate];
@@ -92,12 +92,12 @@
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-    // Customize the appearance of table view cells.
+	// Customize the appearance of table view cells.
 	
 	UITableViewCell *cell;
 	
 	if(indexPath.section == 1) { // inputs
-		cell = [tableView dequeueReusableCellWithIdentifier:@"MidiInputCell"];//] forIndexPath:indexPath];
+		cell = [tableView dequeueReusableCellWithIdentifier:@"MidiInputCell"];
 		if(!cell) {
 			cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"MidiInputCell"];
 		}
@@ -106,7 +106,7 @@
 		cell.textLabel.text = [[midi.inputs objectAtIndex:indexPath.row] name];
 	}
 	else if(indexPath.section == 2) { // outputs
-		cell = [tableView dequeueReusableCellWithIdentifier:@"MidiOutputCell"];//] forIndexPath:indexPath];
+		cell = [tableView dequeueReusableCellWithIdentifier:@"MidiOutputCell"];
 		if(!cell) {
 			cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"MidiOutputCell"];
 		}
@@ -118,7 +118,7 @@
 		cell = [super tableView:tableView cellForRowAtIndexPath:indexPath];
 	}
 	
-    return cell;
+	return cell;
 }
 
 // the following are largely from this post https://devforums.apple.com/message/502990#502990

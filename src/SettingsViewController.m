@@ -36,24 +36,27 @@
 	self.oscKeyEnabledSwitch.on = app.osc.keySendingEnabled;
 	self.oscPrintEnabledSwitch.on = app.osc.printSendingEnabled;
 	
+	self.autoLatencySwitch.on = app.pureData.autoLatency;
+	self.ticksPerBufferSegmentedControl.enabled = !app.pureData.autoLatency;
+	self.ticksPerBufferSegmentedControl.userInteractionEnabled = !app.pureData.autoLatency;
 	ticksPerBufferValues = [NSArray arrayWithObjects:
 		[NSNumber numberWithInt:1], [NSNumber numberWithInt:2], [NSNumber numberWithInt:4],
 		[NSNumber numberWithInt:8], [NSNumber numberWithInt:16], [NSNumber numberWithInt:32], nil];
-	for(int i = (int)ticksPerBufferValues.count-1; i > 0; --i) {
+	for(int i = 0; i < (int)ticksPerBufferValues.count; ++i) {
 		NSNumber *value = [ticksPerBufferValues objectAtIndex:i];
-		if(app.pureData.ticksPerBuffer >= [value intValue]) {
+		if(app.pureData.ticksPerBuffer <= [value intValue]) {
 			self.ticksPerBufferSegmentedControl.selectedSegmentIndex = i;
 			break;
 		}
 	}
-	self.latencyLabel.text = [NSString stringWithFormat:@"%.1f ms", [app.pureData calculateLatency]];
+	[self updateLatencyLabel];
 	
     [super viewDidLoad];
 }
 
 - (void)didReceiveMemoryWarning {
-    [super didReceiveMemoryWarning];
-    // Dispose of any resources that can be recreated.
+	[super didReceiveMemoryWarning];
+	// Dispose of any resources that can be recreated.
 }
 
 // lock orientation
@@ -94,11 +97,18 @@
 
 #pragma mark Audio Latency
 
+- (IBAction)autoLatencyChanged:(id)sender {
+	app.pureData.autoLatency = self.autoLatencySwitch.isOn;
+	self.ticksPerBufferSegmentedControl.enabled = !app.pureData.autoLatency;
+	self.ticksPerBufferSegmentedControl.userInteractionEnabled = !app.pureData.autoLatency;
+	//self.ticksPerBufferSegmentedControl.tintColor = [UIColor grayColor];
+}
+
 - (IBAction)ticksPerBufferChanged:(id)sender {
 	// get value from array
 	int index = (int)self.ticksPerBufferSegmentedControl.selectedSegmentIndex;
 	app.pureData.ticksPerBuffer = [[ticksPerBufferValues objectAtIndex:index] intValue];
-	self.latencyLabel.text = [NSString stringWithFormat:@"%.1f ms", [app.pureData calculateLatency]];
+	[self updateLatencyLabel];
 }
 
 #pragma mark Default Folders
@@ -141,6 +151,13 @@
 			});
 		});
 	}
+}
+
+#pragma mark Private
+
+- (void)updateLatencyLabel {
+	self.latencyLabel.text = [NSString stringWithFormat:@"%.1f ms @ %d Hz",
+		[app.pureData calculateLatency], app.pureData.sampleRate];
 }
 
 @end
